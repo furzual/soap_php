@@ -98,6 +98,7 @@ $req_sale_3ds = '
     </SOAP-ENV:Body>
 </SOAP-ENV:Envelope>
 ';
+$requestsoap = ($value_3ds === 'on' || $value_3ds === 'ON') ? $req_sale_3ds : $req_sale_no_3ds;
 
 // Función para hacer beautify del XML
 function beautifyXml($xmlString) {
@@ -143,9 +144,6 @@ function extractTransactionData($xmlResponse) {
 }
 
 // Reemplazar con el XML correspondiente
-
-// Definir la solicitud SOAP según 3DS
-$requestsoap = ($value_3ds === 'on' || $value_3ds === 'ON') ? $req_sale_3ds : $req_sale_no_3ds;
 
 // Función para realizar la solicitud SOAP
 function sendSoapRequest($url, $requestBody, $username, $password, $certPath, $certPassword) {
@@ -216,6 +214,52 @@ if ($result['error']) {
     $_SESSION['sesion_trxid'] = $responseData['IpgTransactionId'];
 }
 
+$iframe_received = '
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ipg="http://ipg-online.com/ipgapi/schemas/ipgapi" xmlns:v1="http://ipg-online.com/ipgapi/schemas/v1">
+    <soapenv:Header/>
+    <soapenv:Body>
+        <ipg:IPGApiOrderRequest>
+            <v1:Transaction>
+                <v1:CreditCardTxType>
+                    <v1:StoreId>' . strval($_SESSION['sesion_sid']) . '</v1:StoreId>
+                    <v1:Type>sale</v1:Type>
+                </v1:CreditCardTxType>
+                <v1:CreditCard3DSecure>
+                    <v1:Secure3DMethodNotificationStatus>RECEIVED</v1:Secure3DMethodNotificationStatus>
+                </v1:CreditCard3DSecure>
+                <v1:TransactionDetails>
+                    <v1:IpgTransactionId>' . strval($_SESSION['sesion_trxid']) . '</v1:IpgTransactionId>
+                </v1:TransactionDetails>
+            </v1:Transaction>
+        </ipg:IPGApiOrderRequest>
+    </soapenv:Body>
+</soapenv:Envelope>
+';
+
+if ($value_3ds === 'on' || $value_3ds === 'ON') {
+    $resultiframe = sendSoapRequest(
+        $soapUrl,
+        $iframe_received,
+        $_SESSION['sesion_user'],
+        $_SESSION['sesion_upass'],
+        $_SESSION['sesion_cpath'],
+        $_SESSION['sesion_cpass']
+    );
+    
+    if ($resultiframe['error']) {
+        $formattedResponse2 = "Error: " . htmlspecialchars($resultiframe['message']);
+    } else {
+        $formattedResponse2 = beautifyXml($resultiframe['response']);
+        $secure3DMethodForm2 = extractSecure3DMethodForm($resultiframe['response']);
+        $responseData2 = extractTransactionData($resultiframe['response']);
+        $_SESSION['sesion_oid'] = $responseData2['OrderId'];
+        $_SESSION['sesion_trxid'] = $responseData2['IpgTransactionId'];
+    }
+} else {
+    $formattedResponse2 = 'No 3DS';
+}
+
+
 ?>
 
 <!DOCTYPE html>
@@ -237,5 +281,8 @@ if ($result['error']) {
     <h1>Data</h1>
     <pre><?php echo 'oid: ' . htmlspecialchars($_SESSION['sesion_oid'] ?? ''); ?></pre>
     <pre><?php echo 'IPGtransactionId: ' . htmlspecialchars($_SESSION['sesion_trxid'] ?? ''); ?></pre>
+
+    <h1>iFrame response</h1>
+    <pre><?php echo htmlspecialchars($formattedResponse2); ?></pre>
 </body>
 </html>
