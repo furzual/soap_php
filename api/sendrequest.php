@@ -1,5 +1,6 @@
 <?php
 session_start();
+
 if (isset($_POST['environment-sel']) && 
     isset($_POST['storeid_inp']) && 
     isset($_POST['user_inp']) && 
@@ -27,14 +28,14 @@ if (isset($_POST['environment-sel']) &&
     header("Location: apiform.php");
     exit;
 }
+
 if (isset($_POST['3ds_inp'])) {
     $value_3ds = $_POST['3ds_inp'];
-}
-else{
+} else {
     $value_3ds = 'off';
 }
 
-// Construcción del XML SOAP
+// Construcción de los XML SOAP
 $req_sale_no_3ds = '
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ipg="http://ipg-online.com/ipgapi/schemas/ipgapi" xmlns:v1="http://ipg-online.com/ipgapi/schemas/v1">
     <soapenv:Header/>
@@ -59,7 +60,7 @@ $req_sale_no_3ds = '
         </ipg:IPGApiOrderRequest>
     </soapenv:Body>
 </soapenv:Envelope>
-';
+'; // Reemplazar con el XML correspondiente
 
 $req_sale_3ds = '
 <SOAP-ENV:Envelope
@@ -72,6 +73,7 @@ $req_sale_3ds = '
  >
             <ns2:Transaction>
                 <ns2:CreditCardTxType>
+                    <ns2:StoreId>' . strval($_SESSION['sesion_sid']) . '</ns2:StoreId>
                     <ns2:Type>sale</ns2:Type>
                 </ns2:CreditCardTxType>
                 <ns2:CreditCardData>
@@ -97,59 +99,6 @@ $req_sale_3ds = '
 </SOAP-ENV:Envelope>
 ';
 
-//Definiendo si va con 3DS la transaccion
-if ($value_3ds =='on' || $value_3ds =='ON'){
-    $requestsoap = $req_sale_3ds;
-}
-else{
-    $requestsoap = $req_sale_no_3ds;
-}
-
-// Configuración del endpoint SOAP
-$soapUrl = "https://test.ipg-online.com/ipgapi/services"; // URL del servicio SOAP
-
-// Inicializar cURL
-$ch = curl_init($soapUrl);
-
-// Configuración de cURL
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $requestsoap);
-
-// Configurar las cabeceras HTTP
-$headers = [
-    "Content-Type: text/xml; charset=utf-8",
-    "SOAPAction: \"\"",
-    "Content-Length: " . strlen($requestsoap)
-];
-curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-// Configurar autenticación básica
-curl_setopt($ch, CURLOPT_USERPWD, $_SESSION['sesion_user'] . ":" . $_SESSION['sesion_upass']);
-
-// Configurar el certificado P12
-curl_setopt($ch, CURLOPT_SSLCERTTYPE, "P12");
-curl_setopt($ch, CURLOPT_SSLCERT, $_SESSION['sesion_cpath']);
-curl_setopt($ch, CURLOPT_SSLCERTPASSWD, $_SESSION['sesion_cpass']);
-
-// Habilitar la verificación SSL
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-
-// Configurar el tiempo de espera
-curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-// Obtener la respuesta como string
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-// Ejecutar la solicitud
-$response = curl_exec($ch);
-
-// Manejo de errores
-if (curl_errno($ch)) {
-    $error_msg = curl_error($ch);
-}
-curl_close($ch);
-
 // Función para hacer beautify del XML
 function beautifyXml($xmlString) {
     $dom = new DOMDocument('1.0', 'UTF-8');
@@ -159,7 +108,7 @@ function beautifyXml($xmlString) {
     return $dom->saveXML();
 }
 
-// Buscar el campo Secure3DMethodForm en la respuesta
+// Función para buscar el campo Secure3DMethodForm en la respuesta
 function extractSecure3DMethodForm($xmlResponse) {
     $dom = new DOMDocument;
     $dom->loadXML($xmlResponse);
@@ -168,6 +117,8 @@ function extractSecure3DMethodForm($xmlResponse) {
     $formNode = $xpath->query("//v1:Secure3DMethodForm");
     return $formNode->length > 0 ? $formNode->item(0)->nodeValue : "Campo no encontrado";
 }
+
+// Función para extraer datos de la transacción del XML de respuesta
 function extractTransactionData($xmlResponse) {
     $dom = new DOMDocument;
     $dom->loadXML($xmlResponse);
@@ -191,21 +142,80 @@ function extractTransactionData($xmlResponse) {
     ];
 }
 
+// Reemplazar con el XML correspondiente
 
-//CNI 4147463011110059
-//CCI 5204740000002745
-//FNI 4147463011110083
-//FCI 4265880000000007
+// Definir la solicitud SOAP según 3DS
+$requestsoap = ($value_3ds === 'on' || $value_3ds === 'ON') ? $req_sale_3ds : $req_sale_no_3ds;
 
-// Beautify de la solicitud SOAP
-$formattedRequest = beautifyXml($requestsoap);
+// Función para realizar la solicitud SOAP
+function sendSoapRequest($url, $requestBody, $username, $password, $certPath, $certPassword) {
+    $ch = curl_init($url);
 
-// Beautify de la respuesta SOAP si no hay errores
-$formattedResponse = isset($error_msg) ? $error_msg : beautifyXml($response);
-$secure3DMethodForm = isset($error_msg) ? "Error: $error_msg" : extractSecure3DMethodForm($response);
-$responseData = extractTransactionData($response);
-$_SESSION['sesion_oid'] = $responseData['OrderId'];
-$_SESSION['sesion_trxid'] = $responseData['IpgTransactionId'];
+    // Configuración de cURL
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $requestBody);
+
+    // Configurar las cabeceras HTTP
+    $headers = [
+        "Content-Type: text/xml; charset=utf-8",
+        "SOAPAction: \"\"",
+        "Content-Length: " . strlen($requestBody)
+    ];
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    // Configurar autenticación básica
+    curl_setopt($ch, CURLOPT_USERPWD, "$username:$password");
+
+    // Configurar el certificado P12
+    curl_setopt($ch, CURLOPT_SSLCERTTYPE, "P12");
+    curl_setopt($ch, CURLOPT_SSLCERT, $certPath);
+    curl_setopt($ch, CURLOPT_SSLCERTPASSWD, $certPassword);
+
+    // Habilitar la verificación SSL
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+    // Configurar el tiempo de espera
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+    // Obtener la respuesta como string
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    // Ejecutar la solicitud
+    $response = curl_exec($ch);
+
+    // Manejo de errores
+    if (curl_errno($ch)) {
+        $error_msg = curl_error($ch);
+        curl_close($ch);
+        return ["error" => true, "message" => $error_msg];
+    }
+
+    curl_close($ch);
+    return ["error" => false, "response" => $response];
+}
+
+// Llamar a la función para enviar la solicitud SOAP
+$soapUrl = "https://test.ipg-online.com/ipgapi/services";
+$result = sendSoapRequest(
+    $soapUrl,
+    $requestsoap,
+    $_SESSION['sesion_user'],
+    $_SESSION['sesion_upass'],
+    $_SESSION['sesion_cpath'],
+    $_SESSION['sesion_cpass']
+);
+
+if ($result['error']) {
+    $formattedResponse = "Error: " . htmlspecialchars($result['message']);
+} else {
+    $formattedResponse = beautifyXml($result['response']);
+    $secure3DMethodForm = extractSecure3DMethodForm($result['response']);
+    $responseData = extractTransactionData($result['response']);
+    $_SESSION['sesion_oid'] = $responseData['OrderId'];
+    $_SESSION['sesion_trxid'] = $responseData['IpgTransactionId'];
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -216,15 +226,16 @@ $_SESSION['sesion_trxid'] = $responseData['IpgTransactionId'];
     <title>SOAP Response</title>
 </head>
 <body>
+    <pre><?php echo $secure3DMethodForm ?? ''; ?></pre>
+
     <h1>SOAP Request</h1>
-    <pre><?php echo htmlspecialchars($formattedRequest); ?></pre>
+    <pre><?php echo htmlspecialchars($requestsoap); ?></pre>
 
     <h1>SOAP Response</h1>
     <pre><?php echo htmlspecialchars($formattedResponse); ?></pre>
 
     <h1>Data</h1>
-    <pre><?php echo 'oid: ' . htmlspecialchars($_SESSION['sesion_oid'])?></pre>
-    <pre><?php echo 'IPGtransactionId: ' . htmlspecialchars($_SESSION['sesion_trxid'])?></pre>
-    <pre><?php echo $secure3DMethodForm?></pre>
+    <pre><?php echo 'oid: ' . htmlspecialchars($_SESSION['sesion_oid'] ?? ''); ?></pre>
+    <pre><?php echo 'IPGtransactionId: ' . htmlspecialchars($_SESSION['sesion_trxid'] ?? ''); ?></pre>
 </body>
 </html>

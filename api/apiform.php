@@ -62,14 +62,14 @@
             <div class="field">
                 <label class="label">TermUrl</label>
                 <div class="control">
-                  <input value='https://webhook.site/9fbc1448-3141-46f9-b460-a2579fdb1c02' name="turl_inp" class="input" type="text" placeholder="484" />
+                  <input value='https://fe78-148-244-170-158.ngrok-free.app' name="turl_inp" class="input" type="text" placeholder="484" />
                 </div>
             </div>
 
             <div class="field">
                 <label class="label">ThreeDSMethodNotificationURL</label>
                 <div class="control">
-                  <input value='https://webhook.site/9fbc1448-3141-46f9-b460-a2579fdb1c02' name="murl_inp" class="input" type="text" placeholder="484" />
+                  <input value='https://fe78-148-244-170-158.ngrok-free.app' name="murl_inp" class="input" type="text" placeholder="484" />
                 </div>
             </div>
 
